@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    # To test with your own data, uncomment and adjust:
+    # volumes:
+    #   - ./your-data.jsonl:/data/records.jsonl:ro
+    # environment:
+    #   - DATA_FILE=/data/records.jsonl
