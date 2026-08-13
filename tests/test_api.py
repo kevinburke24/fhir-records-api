@@ -72,6 +72,50 @@ def test_patient_records_scoped_and_sorted(client):
     assert [r["id"] for r in dated] == ["o1", "m1", "c1"]  # newest first
 
 
+def test_records_pagination_limit(client):
+    c, _ = client
+    body = c.get("/patients/p1/records", params={"limit": 2}).json()
+    assert body["limit"] == 2
+    assert body["offset"] == 0
+    assert body["count"] == 2
+    assert len(body["records"]) == 2
+
+
+def test_records_pagination_offset_continues_sequence(client):
+    c, _ = client
+    full = c.get("/patients/p1/records", params={"limit": 50}).json()["records"]
+    assert len(full) >= 3                                # need at least 3 to page through
+
+    # walk the list one record at a time via offset and confirm it matches
+    # the unpaginated order exactly, with no gaps or duplicates
+    paged = []
+    for i in range(len(full)):
+        page = c.get("/patients/p1/records", params={"limit": 1, "offset": i}).json()["records"]
+        paged.extend(page)
+    assert [r["id"] for r in paged] == [r["id"] for r in full]
+
+
+def test_records_pagination_offset_past_end_is_empty(client):
+    c, _ = client
+    body = c.get("/patients/p1/records", params={"offset": 1000}).json()
+    assert body["count"] == 0
+    assert body["records"] == []
+
+
+def test_records_pagination_defaults(client):
+    c, _ = client
+    body = c.get("/patients/p1/records").json()
+    assert body["limit"] == 50
+    assert body["offset"] == 0
+
+
+def test_records_pagination_limit_bounds_rejected(client):
+    c, _ = client
+    assert c.get("/patients/p1/records", params={"limit": 0}).status_code == 422
+    assert c.get("/patients/p1/records", params={"limit": 51}).status_code == 422
+    assert c.get("/patients/p1/records", params={"offset": -1}).status_code == 422
+
+
 def test_search_synonym_expansion(client):
     c, _ = client
     # 'heart' -> {cardiac, cardiology, cardiovascular, coronary} matches

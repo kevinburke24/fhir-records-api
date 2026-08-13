@@ -92,7 +92,7 @@ def wipe_patient_records(patient_id: str):
     """
     removed = store.wipe_patient(patient_id)
     return {"patient_id": patient_id, "removed": removed}
-   
+
 @app.delete("/records/{resource_type}/{record_id}")
 def delete_record(resource_type: str, record_id: str):
     if not store.remove((resource_type, record_id)):

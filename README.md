@@ -85,7 +85,7 @@ than silently dropped or crashed on. `/status` makes all of this visible.
 
 **Auth (out of scope):** with authentication, the patient identity would
 come from the session token, not the URL path so only logged-in patients
-can have access to their data. Wipe would additionally get a soft-delete
-grace window and an audit event that records the deletion (without the
-confidential content).
+can have access to their data and delete it. Wipe would additionally
+get a soft-delete grace window and an audit event that records the deletion 
+(without the confidential content).
 
