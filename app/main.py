@@ -83,13 +83,12 @@ def add_record(resource: FHIRResource):
 
 @app.delete("/patients/{patient_id}/records")
 def wipe_patient_records(patient_id: str):
-    """Patient right-to-erasure. Idempotent: wiping an unknown/already-wiped
-    patient succeeds with removed=0 rather than 404 — deletion cares about
-    the end state, not whether there was something to delete.
+    """Patient right-to-erasure. Idempotent: wiping an unknown or already-wiped
+    patient succeeds with removed=0 rather than 404. Patients care about the
+    end state, not whether there was something to delete.
 
-    Production notes (out of scope, ready to discuss): auth-derived patient
-    identity, soft-delete grace window before hard purge, audit event
-    recording the deletion without the clinical content.
+    Production notes (out of scope): auth-derived patient identity, soft-delete
+    before hard purge, audit event recording the deletion event
     """
     removed = store.wipe_patient(patient_id)
     return {"patient_id": patient_id, "removed": removed}

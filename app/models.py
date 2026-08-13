@@ -2,9 +2,9 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class FHIRResource(BaseModel):
-    """Deliberately permissive: FHIR has 140+ resource types and the grader's
-    data is unseen, so we validate the two fields every resource must carry
-    and accept everything else as-is (extra fields are preserved)."""
+    """Deliberately permissive: FHIR could have mroe resource types,
+    so we validate the two fields every resource must carry
+    and accept everything else as-is."""
 
     model_config = ConfigDict(extra="allow")
 

@@ -31,7 +31,7 @@ building, or mount any file via the `-v`/`DATA_FILE` pattern above.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/patients/{id}/records?type=&q=&from=&to=` | Patient's records; filter by type/date, keyword search with synonym expansion |
+| GET | `/patients/{id}/records?type=&q=&from=&to=&offset=&limit=` | Patient's records; filter by type/date, keyword search with synonym expansion, pagination |
 | GET | `/patients/{id}/medications?status=` | Medication list |
 | GET | `/records/{type}/{id}` | Single record (keyed by type+id: FHIR ids are only unique per type) |
 | POST | `/records` | Add a record; validated, deduplicated (409), indexes updated |
@@ -40,9 +40,14 @@ building, or mount any file via the `-v`/`DATA_FILE` pattern above.
 
 ## Design notes
 
-**Who consumes this:** a patient (or the patient-facing app acting for them).
+**Who consumes this:** a patient.
 That drove the endpoint shapes — records/medications scoped to one patient,
-keyword search in patient vocabulary, and erasure as a first-class operation.
+keyword search in patient vocabulary, and right-to-erasure as a priortiy.
+Secondary users like biopharma and research companies are scoped out on purpose
+because they require different data models and endpoints: data would need to be
+accessed across all patients. That also requires a completely different approach
+to data privacy.
+
 
 **In-memory over a database — deliberately.** The prompt scopes out
 ingestion and the dataset fits in RAM, so records load at startup into three
@@ -53,8 +58,8 @@ structures that mirror exactly what a database would build:
 - `term_index` (token → record keys) — the inverted / multikey index
 
 Migration to e.g. MongoDB is therefore mechanical: each structure maps
-one-to-one onto a collection index. The trigger points would be data
-exceeding memory, multiple writers, or a durability requirement
+one-to-one onto a collection index. Known trade-offs are space limitation,
+lack of support for multiple writers, and data volatility
 (currently, POSTed records don't survive restarts — a known trade-off).
 
 **Search (the "additional capability"):** patients don't know FHIR resource
@@ -66,6 +71,11 @@ degrades gracefully instead of returning nothing. Search results are
 intersected with the patient's own record set — the term index is global,
 so this intersection is the privacy boundary.
 
+**Response shape policy** General queries for records are returned in 
+canonical FHIR format, while more purpose-build endpoints are designed
+to handle queries for specific records (i.e. /medications) and return 
+a flattend shape
+
 **Messy data:** malformed lines are skipped and counted, never fatal.
 Unknown resource types are stored and served — the system indexes by
 convention (patient reference, dates, text), not by a type whitelist.
@@ -73,8 +83,9 @@ Both `Patient/id` and `urn:uuid:id` reference styles resolve. Records
 with no resolvable patient are counted and sampled in `/status` rather
 than silently dropped or crashed on. `/status` makes all of this visible.
 
-**Auth (out of scope, by design):** with authentication, the patient
-identity would come from the session token, not the URL path — so
-records, medications, and wipe could only ever operate on the caller's
-own data. Wipe would additionally get a soft-delete grace window and an
-audit event that records the deletion without the clinical content.
+**Auth (out of scope):** with authentication, the patient identity would
+come from the session token, not the URL path so only logged-in patients
+can have access to their data. Wipe would additionally get a soft-delete
+grace window and an audit event that records the deletion (without the
+confidential content).
+

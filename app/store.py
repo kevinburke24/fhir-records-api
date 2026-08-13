@@ -40,9 +40,8 @@ _DATE_KEYS = (
 def normalize_ref(ref: str) -> str | None:
     """'Patient/abc' -> 'abc';  'urn:uuid:abc' -> 'abc'.
 
-    Synthetic FHIR (e.g. Synthea) commonly uses urn:uuid references, real
-    exports use Type/id — silently supporting only one orphans half the
-    world's data.
+    Normalizing reference into one format so patient IDs are standard
+    across all stored records
     """
     if not isinstance(ref, str) or not ref:
         return None
@@ -69,7 +68,7 @@ def extract_patient_id(resource: dict) -> str | None:
 def extract_event_date(resource: dict) -> str | None:
     for key in _DATE_KEYS:
         v = resource.get(key)
-        if isinstance(v, str) and v:
+        if v and isinstance(v, str):
             return v
     period = resource.get("period")
     if isinstance(period, dict) and isinstance(period.get("start"), str):
@@ -77,7 +76,7 @@ def extract_event_date(resource: dict) -> str | None:
     return None
 
 def harvest_tokens(node) -> set[str]:
-    """Recursively collect lowercase word tokens from human-readable fields."""
+    """Recursively collect lowercase word tokens from records."""
     tokens: set[str] = set()
 
     def walk(n):
@@ -224,9 +223,10 @@ class Store:
         
         if q:
             # Expand the whole query as a phrase first (so multi-word synonym
-            # entries like "blood pressure" -> hypertension work), then within
-            # each candidate term: AND across its words (each word also
-            # expanded), OR across candidate terms.
+            # entries like "blood pressure" -> hypertension work), then break
+            # up each synonym term, as well as the term itself, into individual
+            # words and expand each of those. Candidate terms are those that
+            # exist in the terms index
             matched: set[RecordKey] = set()
             for term in expand(q):
                 words = _TOKEN_RE.findall(term)
@@ -238,8 +238,9 @@ class Store:
                             word_hits |= self.term_index.get(syn_word, set())
                     term_hits = word_hits if term_hits is None else (term_hits & word_hits)
                 matched |= term_hits or set()
-            # Intersecting with the patient's own keys is the search-side
-            # privacy boundary: the term index is global.
+            # Search-side privacy boundary: since the term index is global, it's
+            # really important that we intersect matched candidate terms with the
+            # patient's own keys.
             keys = keys & matched
 
         results = [self.records[k] for k in keys]
@@ -268,6 +269,7 @@ class Store:
         return meds
 
     def flatten_medication(self, r: dict) -> dict:
+        """Returns a focused, patient-friendly view of medications."""
         med = r.get("medicationCodeableConcept", {})
         name = med.get("text") or next(
             (c.get("display") for c in med.get("coding", []) if c.get("display")), None

@@ -2,10 +2,10 @@
 
 Design note: expansion happens at QUERY time, not index time. The index
 holds only tokens that literally appear in records; a search for "heart"
-expands to every term in its group and unions the results. This keeps the
-index smaller and means the synonym map can be edited without a reload.
-Terms absent from this map still work as literal keyword search (the
-fallback that protects us on unseen data).
+expands to every term in its group and returns results that contain
+the union of all those terms, including the term itself. Synonyms are not
+kept in the index for 2 reasons 1) to control the size of the index and 
+2) so we don't have to rebuild the index when a new synoynm is added
 """
 
 SYNONYM_GROUPS: list[set[str]] = [
