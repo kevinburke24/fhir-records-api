@@ -39,24 +39,78 @@ building, or mount any file via the `-v`/`DATA_FILE` pattern above.
 | DELETE | `/patients/{id}/records/{type}/{id}` | Delete a patient's record; idempotent |
 | GET | `/status` | Load report: counts, skipped lines, unknown types |
 
-## curl Command examples
+## API examples
 
-# Load report — what parsed, what didn't
-curl -s localhost:8000/status | jq
+All examples assume the server is running on `localhost:8000`. Patient and record
+ids are from the included sample data. Pipe to `jq` for readable output if you have it.
 
-# A patient's records, newest first, paginated
-curl -s "localhost:8000/patients/patrick-ball/records?limit=5" | jq
+### Load report — what parsed, and what didn't
 
-# Fetch one record by its FHIR address: /records/{resourceType}/{id}
+```bash
+curl -s localhost:8000/status
+```
+
+Reports records loaded, malformed lines skipped, resource types found (including
+`ClinicalNote`, which isn't a standard FHIR type), and records with no resolvable
+patient.
+
+### Browse a patient's records
+
+```bash
+# Newest first, paginated (default limit 50)
+curl -s "localhost:8000/patients/patrick-ball/records?limit=5"
+
+# Filter by resource type
+curl -s "localhost:8000/patients/patrick-ball/records?type=Condition"
+
+# Filter by date range (params are `from` and `to`)
+curl -s "localhost:8000/patients/patrick-ball/records?from=2020-01-01&to=2022-12-31"
+```
+
+### Search a patient's history
+
+Query terms expand through a synonym map, so patient vocabulary matches clinical
+vocabulary. Unmapped terms fall back to literal keyword matching.
+
+```bash
+# "heart" matches records that say "coronary"
+curl -s "localhost:8000/patients/patrick-ball/records?q=heart"
+
+# Search combines with the other filters
+curl -s "localhost:8000/patients/patrick-ball/records?q=heart&type=Condition"
+```
+
+### Fetch a single record
+
+Records are addressed by `{resourceType}/{id}`, matching FHIR's own resource
+address — ids are only unique within a resource type.
+
+```bash
 curl -s localhost:8000/records/Condition/cond-pb-001
 
-# Wrong type with a real id → 404 (the composite key is the identity)
+# Real id, wrong type → 404
 curl -s localhost:8000/records/Observation/cond-pb-001
+```
 
-# Search: "heart" matches records that say "coronary"
-curl -s "localhost:8000/patients/patrick-ball/records?q=heart" | jq
+### Medications
 
-# Add: Add a patient record
+Purpose-built endpoints return flattened, purpose-specific shapes; the generic
+records endpoint returns canonical FHIR.
+
+```bash
+curl -s localhost:8000/patients/patrick-ball/medications
+curl -s "localhost:8000/patients/patrick-ball/medications?status=active"
+
+# Same data, unflattened, via the generic endpoint
+curl -s "localhost:8000/patients/patrick-ball/records?type=MedicationRequest"
+```
+
+### Add a record
+
+Records are validated and deduplicated; all indexes update immediately.
+Note that added records live in memory only and don't survive a restart.
+
+```bash
 curl -s -X POST localhost:8000/records \
   -H "Content-Type: application/json" \
   -d '{
@@ -67,25 +121,28 @@ curl -s -X POST localhost:8000/records \
     "onsetDateTime": "2024-04-12"
   }'
 
-# Date range (note: params are `from`/`to`)
-curl -s "localhost:8000/patients/patrick-ball/records?from=2020-01-01&to=2022-12-31" | jq
+# Immediately searchable
+curl -s "localhost:8000/patients/patrick-ball/records?q=allergy"
 
-# Single deletion: Delete a record
+# Duplicate → 409
+curl -s -X POST localhost:8000/records \
+  -H "Content-Type: application/json" \
+  -d '{"resourceType": "Condition", "id": "cond-demo-001"}'
 
-curl -sX DELETE "localhost:8000/records/Observation/obs-nw-008" | jq
+# Missing required fields → 422
+curl -s -X POST localhost:8000/records \
+  -H "Content-Type: application/json" \
+  -d '{"id": "no-type-here"}'
+```
 
-# Wipeout: Delete all of a patient's records
+### Erase a patient's data
 
-curl -sX DELETE "localhost/patients/patrick-ball/records" | jq
+Idempotent — erasing an already-erased patient returns `removed: 0` rather than
+404. Clears the search index too, not just stored records.
 
-# Medication list (flattens to name/status/dosage/date, not raw FHIR)
-curl -s localhost:8000/patients/patrick-ball/medications
-
-# Medications list - Filter to active prescriptions only
-curl -s "localhost:8000/patients/patrick-ball/medications?status=active"
-
-# Medications alternative - Same data, via the generic endpoint (canonical FHIR output)
-curl -s "localhost:8000/patients/patrick-ball/records?type=MedicationRequest"
+```bash
+curl -s -X DELETE localhost:8000/patients/patrick-ball/records
+```
 
 ## Design notes
 
