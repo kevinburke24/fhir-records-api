@@ -116,6 +116,36 @@ def test_records_pagination_limit_bounds_rejected(client):
     assert c.get("/patients/p1/records", params={"offset": -1}).status_code == 422
 
 
+def test_records_date_range_filters_to_window(client):
+    c, _ = client
+    # only o1 (2023-06-15) falls inside this window; c1 (2021-03-01) and
+    # m1 (2022-01-10) are earlier, undated records (x1) are excluded outright
+    body = c.get("/patients/p1/records", params={"from": "2023-01-01", "to": "2023-12-31"}).json()
+    assert [r["id"] for r in body["records"]] == ["o1"]
+
+
+def test_records_date_range_bounds_are_inclusive(client):
+    c, _ = client
+    body = c.get("/patients/p1/records", params={"from": "2022-01-10", "to": "2022-01-10"}).json()
+    assert [r["id"] for r in body["records"]] == ["m1"]
+
+
+def test_records_date_range_excludes_undated_records(client):
+    c, _ = client
+    # x1 (MysteryType) has no date field; any date filter should drop it
+    body = c.get("/patients/p1/records", params={"from": "2000-01-01"}).json()
+    ids = [r["id"] for r in body["records"]]
+    assert "x1" not in ids
+    assert set(ids) == {"c1", "m1", "o1"}
+
+
+def test_records_date_range_with_no_matches_is_empty(client):
+    c, _ = client
+    body = c.get("/patients/p1/records", params={"from": "2030-01-01"}).json()
+    assert body["records"] == []
+    assert body["count"] == 0
+
+
 def test_search_synonym_expansion(client):
     c, _ = client
     # 'heart' -> {cardiac, cardiology, cardiovascular, coronary} matches

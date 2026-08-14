@@ -36,7 +36,56 @@ building, or mount any file via the `-v`/`DATA_FILE` pattern above.
 | GET | `/records/{type}/{id}` | Single record (keyed by type+id: FHIR ids are only unique per type) |
 | POST | `/records` | Add a record; validated, deduplicated (409), indexes updated |
 | DELETE | `/patients/{id}/records` | Wipe a patient's data (right to erasure); idempotent |
+| DELETE | `/patients/{id}/records/{type}/{id}` | Delete a patient's record; idempotent |
 | GET | `/status` | Load report: counts, skipped lines, unknown types |
+
+## curl Command examples
+
+# Load report — what parsed, what didn't
+curl -s localhost:8000/status | jq
+
+# A patient's records, newest first, paginated
+curl -s "localhost:8000/patients/patrick-ball/records?limit=5" | jq
+
+# Fetch one record by its FHIR address: /records/{resourceType}/{id}
+curl -s localhost:8000/records/Condition/cond-pb-001
+
+# Wrong type with a real id → 404 (the composite key is the identity)
+curl -s localhost:8000/records/Observation/cond-pb-001
+
+# Search: "heart" matches records that say "coronary"
+curl -s "localhost:8000/patients/patrick-ball/records?q=heart" | jq
+
+# Add: Add a patient record
+curl -s -X POST localhost:8000/records \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resourceType": "Condition",
+    "id": "cond-demo-001",
+    "subject": {"reference": "Patient/patrick-ball"},
+    "code": {"text": "Seasonal allergic rhinitis"},
+    "onsetDateTime": "2024-04-12"
+  }'
+
+# Date range (note: params are `from`/`to`)
+curl -s "localhost:8000/patients/patrick-ball/records?from=2020-01-01&to=2022-12-31" | jq
+
+# Single deletion: Delete a record
+
+curl -sX DELETE "localhost:8000/records/Observation/obs-nw-008" | jq
+
+# Wipeout: Delete all of a patient's records
+
+curl -sX DELETE "localhost/patients/patrick-ball/records" | jq
+
+# Medication list (flattens to name/status/dosage/date, not raw FHIR)
+curl -s localhost:8000/patients/patrick-ball/medications
+
+# Medications list - Filter to active prescriptions only
+curl -s "localhost:8000/patients/patrick-ball/medications?status=active"
+
+# Medications alternative - Same data, via the generic endpoint (canonical FHIR output)
+curl -s "localhost:8000/patients/patrick-ball/records?type=MedicationRequest"
 
 ## Design notes
 

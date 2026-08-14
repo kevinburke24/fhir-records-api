@@ -2,7 +2,9 @@
 
 Two index structures:
 
-    RecordKey = (ResourceType, FHIR ID) because FHIR IDs are only unique per resource type
+    RecordKey = (ResourceType, FHIR ID) because FHIR docs specify that types should
+    always be included in requests for specific resources, even when ID is included
+    (IDs are only guarenteed to be unique per-resource).
 
     patient_index: dict[patient_id -> set[RecordKey]] (analog: compound index)
     term_idx: dict[term -> set[RecordKey]] (analog: inverted index)
