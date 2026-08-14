@@ -31,13 +31,13 @@ building, or mount any file via the `-v`/`DATA_FILE` pattern above.
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/status` | Load report: counts, skipped lines, unknown types |
 | GET | `/patients/{id}/records?type=&q=&from=&to=&offset=&limit=` | Patient's records; filter by type/date, keyword search with synonym expansion, pagination |
-| GET | `/patients/{id}/medications?status=` | Medication list |
 | GET | `/records/{type}/{id}` | Single record (keyed by type+id: FHIR ids are only unique per type) |
+| GET | `/patients/{id}/medications?status=` | Medication list |
 | POST | `/records` | Add a record; validated, deduplicated (409), indexes updated |
 | DELETE | `/patients/{id}/records` | Wipe a patient's data (right to erasure); idempotent |
-| DELETE | `/patients/{id}/records/{type}/{id}` | Delete a patient's record; idempotent |
-| GET | `/status` | Load report: counts, skipped lines, unknown types |
+| DELETE | `/records/{type}/{id}` | Delete a patient's record; idempotent |
 
 ## API examples
 
@@ -63,27 +63,25 @@ curl -s "localhost:8000/patients/patrick-ball/records?limit=5"
 # Filter by resource type
 curl -s "localhost:8000/patients/patrick-ball/records?type=Condition"
 
-# Filter by date range (params are `from` and `to`)
+# Filter by date range
 curl -s "localhost:8000/patients/patrick-ball/records?from=2020-01-01&to=2022-12-31"
 ```
 
 ### Search a patient's history
 
-Query terms expand through a synonym map, so patient vocabulary matches clinical
-vocabulary. Unmapped terms fall back to literal keyword matching.
+Query terms expand through a synonym map, so patients can search using their own vocabulary. Unmapped terms fall back to literal keyword matching.
 
 ```bash
 # "heart" matches records that say "coronary"
 curl -s "localhost:8000/patients/patrick-ball/records?q=heart"
 
-# Search combines with the other filters
+# Search combined with the other filters
 curl -s "localhost:8000/patients/patrick-ball/records?q=heart&type=Condition"
 ```
 
 ### Fetch a single record
 
-Records are addressed by `{resourceType}/{id}`, matching FHIR's own resource
-address — ids are only unique within a resource type.
+Records are addressed by `{resourceType}/{id}`, as suggested in FHIR docs, which specified that IDs are only unique within a resource type.
 
 ```bash
 curl -s localhost:8000/records/Condition/cond-pb-001
@@ -94,8 +92,8 @@ curl -s localhost:8000/records/Observation/cond-pb-001
 
 ### Medications
 
-Purpose-built endpoints return flattened, purpose-specific shapes; the generic
-records endpoint returns canonical FHIR.
+Purpose-built endpoints return flattened, purpose-specific shapes as opposed to the generic
+records endpoint, which returns canonical FHIR.
 
 ```bash
 curl -s localhost:8000/patients/patrick-ball/medications
@@ -137,10 +135,15 @@ curl -s -X POST localhost:8000/records \
 
 ### Erase a patient's data
 
-Idempotent — erasing an already-erased patient returns `removed: 0` rather than
-404. Clears the search index too, not just stored records.
+Idempotent: erasing an already-erased patient returns `removed: 0` rather than
+404. 
 
 ```bash
+
+# Erase a single record
+curl -s -X DELETE localhost:8000/records/Condition/cond-demo-001
+
+# Wipe out a patient's data
 curl -s -X DELETE localhost:8000/patients/patrick-ball/records
 ```
 
