@@ -38,7 +38,6 @@ _DATE_KEYS = (
     "issued", "date", "performedDateTime",
 )
 
-
 def normalize_ref(ref: str) -> str | None:
     """'Patient/abc' -> 'abc';  'urn:uuid:abc' -> 'abc'.
 
@@ -268,6 +267,8 @@ class Store:
         meds = self.patient_records(patient_id, {"MedicationRequest"})
         if status:
             meds = [self.flatten_medication(m) for m in meds if m.get("status") == status]
+        else:
+            meds = [self.flatten_medication(m) for m in meds]
         return meds
 
     def flatten_medication(self, r: dict) -> dict:

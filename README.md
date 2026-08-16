@@ -73,10 +73,11 @@ Query terms expand through a synonym map, so patients can search using their own
 
 ```bash
 # "heart" matches records that say "coronary"
-curl -s "localhost:8000/patients/patrick-ball/records?q=heart"
+
+curl -s "localhost:8000/patients/tracy-ifeachor/records?q=heart" | jq
 
 # Search combined with the other filters
-curl -s "localhost:8000/patients/patrick-ball/records?q=heart&type=Condition"
+curl -s "localhost:8000/patients/tracy-ifeachor/records?q=heart&type=Condition" | jq
 ```
 
 ### Fetch a single record
@@ -153,23 +154,27 @@ curl -s -X DELETE localhost:8000/patients/patrick-ball/records
 That drove the endpoint shapes — records/medications scoped to one patient,
 keyword search in patient vocabulary, and right-to-erasure as a priortiy.
 Secondary users like biopharma and research companies are scoped out on purpose
-because they require different data models and endpoints: data would need to be
-accessed across all patients. That also requires a completely different approach
-to data privacy.
+because they require different data models and endpoints. For these users,
+data would need to be accessed across all patients, which requires a
+completely different approach to data privacy.
 
-
-**In-memory over a database — deliberately.** The prompt scopes out
-ingestion and the dataset fits in RAM, so records load at startup into three
-structures that mirror exactly what a database would build:
+**In-memory over a database — deliberately.** The prompt mentioned
+ingestion is out of scope and the dataset fits in RAM, so records
+load at startup into three structures:
 
 - `patient_index` (patient → record keys) — the compound index
-- `records` keyed by `(resourceType, id)` — the primary key / unique constraint
-- `term_index` (token → record keys) — the inverted / multikey index
+- `records` keyed by `(resourceType, id)` — the primary key
+- `term_index` (token → record keys) — the inverted index
 
-Migration to e.g. MongoDB is therefore mechanical: each structure maps
+Migration to, e.g MongoDB is straightforward: each structure maps
 one-to-one onto a collection index. Known trade-offs are space limitation,
 lack of support for multiple writers, and data volatility
 (currently, POSTed records don't survive restarts — a known trade-off).
+
+**Response shape policy** General queries for records are returned in 
+canonical FHIR format, while more purpose-build endpoints are designed
+to handle queries for specific records (i.e. /medications) and return 
+a flattend shape
 
 **Search (the "additional capability"):** patients don't know FHIR resource
 types or clinical coding, and at thousands of records browsing fails.
@@ -179,11 +184,6 @@ Unmapped terms fall back to literal keyword match, so unseen vocabulary
 degrades gracefully instead of returning nothing. Search results are
 intersected with the patient's own record set — the term index is global,
 so this intersection is the privacy boundary.
-
-**Response shape policy** General queries for records are returned in 
-canonical FHIR format, while more purpose-build endpoints are designed
-to handle queries for specific records (i.e. /medications) and return 
-a flattend shape
 
 **Messy data:** malformed lines are skipped and counted, never fatal.
 Unknown resource types are stored and served — the system indexes by

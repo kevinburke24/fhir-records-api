@@ -80,7 +80,6 @@ def add_record(resource: FHIRResource):
         )
     return {"status": "created", "key": [resource.resourceType, resource.id]}
 
-
 @app.delete("/patients/{patient_id}/records")
 def wipe_patient_records(patient_id: str):
     """Patient right-to-erasure. Idempotent: wiping an unknown or already-wiped
