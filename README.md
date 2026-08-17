@@ -162,8 +162,9 @@ completely different approach to data privacy.
 ingestion is out of scope and the dataset fits in RAM, so records
 load at startup into three structures:
 
+- `record key` -> (resourceType, id), primary key for records store
 - `patient_index` (patient → record keys) — the compound index
-- `records` keyed by `(resourceType, id)` — the primary key
+- `records` - keyed by record key
 - `term_index` (token → record keys) — the inverted index
 
 Migration to, e.g MongoDB is straightforward: each structure maps
