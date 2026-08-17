@@ -1,10 +1,13 @@
 """Synonym groups bridging patient vocabulary and clinical vocabulary.
 
-Design note: expansion happens at QUERY time, not index time. The index
-holds only tokens that literally appear in records; a search for "heart"
-expands to every term in its group and returns results that contain
-the union of all those terms, including the term itself. Synonyms are not
-kept in the index for 2 reasons 1) to control the size of the index and 
+Design note: expansion happens at QUERY time, not index time. The actual
+terms index holds only tokens that literally appear in records, but this
+map expands the range of avaialable search terms to be outside the index.
+A search for "heart" expands to every term in its group and returns results
+that contain the union of all those terms, including the term itself.
+
+Synonyms are not kept in the index for 2 reasons
+1) to control the size of the index and 
 2) so we don't have to rebuild the index when a new synoynm is added
 """
 
