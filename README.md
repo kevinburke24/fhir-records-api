@@ -137,7 +137,7 @@ curl -s -X POST localhost:8000/records \
 ### Erase a patient's data
 
 Idempotent: erasing an already-erased patient returns `removed: 0` rather than
-404. 
+404.
 
 ```bash
 
@@ -150,15 +150,15 @@ curl -s -X DELETE localhost:8000/patients/patrick-ball/records
 
 ## Design notes
 
-**Who consumes this:** a patient.
-That drove the endpoint shapes — records/medications scoped to one patient,
-keyword search in patient vocabulary, and right-to-erasure as a priortiy.
+**Who consumes this:** A patient, which drove the architecture: r
+ecords/medications scoped to one patient, keyword search in patient
+vocabulary, and right-to-erasure as a priortiy.
 Secondary users like biopharma and research companies are scoped out on purpose
 because they require different data models and endpoints. For these users,
 data would need to be accessed across all patients, which requires a
 completely different approach to data privacy.
 
-**In-memory over a database — deliberately.** The prompt mentioned
+**In-memory over a database.** The prompt mentioned
 ingestion is out of scope and the dataset fits in RAM, so records
 load at startup into three structures:
 
@@ -169,32 +169,30 @@ load at startup into three structures:
 Migration to, e.g MongoDB is straightforward: each structure maps
 one-to-one onto a collection index. Known trade-offs are space limitation,
 lack of support for multiple writers, and data volatility
-(currently, POSTed records don't survive restarts — a known trade-off).
+(currently, added records don't survive restarts).
 
 **Response shape policy** General queries for records are returned in 
 canonical FHIR format, while more purpose-build endpoints are designed
 to handle queries for specific records (i.e. /medications) and return 
 a flattend shape
 
-**Search (the "additional capability"):** patients don't know FHIR resource
-types or clinical coding, and at thousands of records browsing fails.
+**Search (the "additional capability"):** Term search was added because there
+could be potentially thousands of records, and synonym expansion was added on
+top because many patients don't know clinical terminology.
 `?q=` searches all text in the patient's records, expanding query terms
 through a synonym map (heart→cardiac, lipitor→atorvastatin) at query time.
-Unmapped terms fall back to literal keyword match, so unseen vocabulary
-degrades gracefully instead of returning nothing. Search results are
-intersected with the patient's own record set — the term index is global,
-so this intersection is the privacy boundary.
+Unmapped terms fall back to literal keyword match, so vocabulary not in the
+synonym map degrades to the literal search term instead of returning nothing.
+Search results are intersected with the patient's own record set, and
+the term index is global, so this intersection is the privacy boundary.
 
 **Messy data:** malformed lines are skipped and counted, never fatal.
-Unknown resource types are stored and served — the system indexes by
-convention (patient reference, dates, text), not by a type whitelist.
+The system is type-agnostic, so unknown resource types are stored and served.
 Both `Patient/id` and `urn:uuid:id` reference styles resolve. Records
 with no resolvable patient are counted and sampled in `/status` rather
 than silently dropped or crashed on. `/status` makes all of this visible.
 
 **Auth (out of scope):** with authentication, the patient identity would
 come from the session token, not the URL path so only logged-in patients
-can have access to their data and delete it. Wipe would additionally
-get a soft-delete grace window and an audit event that records the deletion 
-(without the confidential content).
+can have access to their data and delete it.
 
